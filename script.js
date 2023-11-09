@@ -19,6 +19,10 @@ class Character {
     }
 
     playAnim(animAction) {
+        if (!(animAction in this.actions)) {
+            console.error(`No ${animAction} in actions list `)
+            return
+        }
         let actionId = this.actions[animAction]
         this._sprite.anims.play(actionId);
     }
@@ -125,7 +129,7 @@ class BattleScene extends Phaser.Scene {
 
         this.currentTurn = 0;
 
-        this.launchCounter(4);
+        this.launchCounter(3);
     }
 
     createCharacters() {
@@ -160,31 +164,33 @@ class BattleScene extends Phaser.Scene {
         // Animation for character 1 idle
         this.anims.create({
             key: 'idle1',
-            frames: this.anims.generateFrameNumbers('character1', { start: 0, end: 3 }),
+            frames: this.anims.generateFrameNumbers('character1', { start: 0, end: 0 }),
             frameRate: 10,
+            repeat: -1
+        });
+
+        // Animation for character 2 idle
+        this.anims.create({
+            key: 'idle2',
+            frames: this.anims.generateFrameNumbers('character2', { start: 0, end: 0 }),
+            frameRate: 5,
             repeat: -1
         });
 
         // Animation for character 1 attack
         this.anims.create({
             key: 'attack1',
-            frames: this.anims.generateFrameNumbers('character1', { start: 16, end: 23 }),
+            // frames: this.anims.generateFrameNumbers('character1', { start: 16, end: 23 }),
+            frames: this.anims.generateFrameNumbers('character1', { start: 20, end: 20 }),
             frameRate: 15,
             repeat: 0
-        });
-
-        // Animation for character 2 idle
-        this.anims.create({
-            key: 'idle2',
-            frames: this.anims.generateFrameNumbers('character2', { start: 0, end: 3 }),
-            frameRate: 5,
-            repeat: -1
         });
 
         // Animation for character 2 attack
         this.anims.create({
             key: 'attack2',
-            frames: this.anims.generateFrameNumbers('character2', { start: 16, end: 23 }),
+            // frames: this.anims.generateFrameNumbers('character2', { start: 16, end: 23 }),
+            frames: this.anims.generateFrameNumbers('character2', { start: 17, end: 17 }),
             frameRate: 15,
             repeat: 0
         });
@@ -237,19 +243,74 @@ class BattleScene extends Phaser.Scene {
     }
 
     launchCounter(counter) {
-        this.makeTurn()
+        // this.makeTurn()
 
-        // if (counter >= 0) {
-        //     this.turnNumberText.setText(`${counter}`)
-        //     this.time.delayedCall(400, this.launchCounter, [counter - 1], this);
-        // } else {
-        //     this.turnNumberText.setText(`Start!`)
-        //     this.makeTurn()
-        // }
+        if (counter > 0) {
+            this.turnNumberText.setText(`${counter}`)
+            this.time.delayedCall(400, this.launchCounter, [counter - 1], this);
+        } else {
+            this.turnNumberText.setText(`Start!`)
+            this.makeTurn()
+        }
     }
 
+    createShakeAnimation(scene, sprite) {
+        // Shake the sprite by altering its x position back and forth
+        const shakeTween = sprite.scene.tweens.add({
+            targets: sprite,
+            x: {
+                // This creates a shake effect by going back and forth from the starting position
+                getStart: () => sprite.x - 10,
+                getEnd: () => sprite.x + 10
+            },
+            duration: 100, // Duration for each shake segment
+            yoyo: true, // Alternate between the start and end values to create the shake
+            repeat: 5, // Repeat the shake this many times
+            ease: 'Quad.easeInOut' // Easing function for smoothness
+        });
+
+        return shakeTween;
+    }
+
+    createAttackAnimation(scene, sprite, direction) {
+        let newX = sprite.x
+
+        const shift = 40
+
+        if (direction == "right") {
+            newX = sprite.x + shift
+        }
+        else if (direction == "left") {
+            newX = sprite.x - shift
+        }
+
+        const attackTween = sprite.scene.tweens.add({
+            targets: sprite,
+            x: newX,
+            y: sprite.y - 40,
+            scaleX: 6,
+            scaleY: 6,
+            duration: 200,
+            yoyo: true,
+            repeat: 1
+        });
+
+        return attackTween;
+    }
+
+    attack(attackingCharacter, direction) {
+        // attackingCharacter.playAnim("attack");
+        return this.createAttackAnimation(this, attackingCharacter.sprite(), direction);
+    }
+
+    defense(defendingCharacter) {
+        return this.createShakeAnimation(this, defendingCharacter.sprite());
+    }
+
+
+
     makeTurn() {
-        this.turnNumberText.setText(`Turn: ${this.currentTurn}`)
+        this.turnNumberText.setText(`Turn: ${this.currentTurn + 1}`)
 
         let attackingCharacterIdx = this.getCurrentActiveCharacterIdx(this.currentTurn);
         let defendingCharactedIdx = 1 - attackingCharacterIdx;
@@ -257,10 +318,17 @@ class BattleScene extends Phaser.Scene {
         let attackingCharacter = this.characters[attackingCharacterIdx];
         let defendingCharacter = this.characters[defendingCharactedIdx];
 
-        attackingCharacter.playAnim("attack");
-        defendingCharacter.playAnim("idle");
 
-        attackingCharacter.sprite().once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        let attackDirection = attackingCharacterIdx == 0 ? "right" : "left"
+        const attackTween = this.attack(attackingCharacter, attackDirection);
+        const defenseTween = this.defense(defendingCharacter)
+
+        // let animationEndEvent = Phaser.Animations.Events.ANIMATION_COMPLETE;
+        let animationEndEvent = Phaser.Tweens.Events.TWEEN_COMPLETE;
+
+
+        // attackingCharacter.sprite().once(animationEndEvent, () => {
+        attackTween.once(animationEndEvent, () => {
             let damage = Math.random() * 20 + 15;
             defendingCharacter.takeDamage(damage);
 
@@ -275,7 +343,7 @@ class BattleScene extends Phaser.Scene {
             attackingCharacter.playAnim("idle");
             // next turn
             this.currentTurn += 1
-            this.time.delayedCall(500, this.makeTurn, [], this);
+            this.time.delayedCall(1000, this.makeTurn, [], this);
         })
     }
 
@@ -302,7 +370,7 @@ const config = {
     scale: {
         mode: Phaser.Scale.FIT,
         // parent: 'phaser-example',
-        autoCenter: Phaser.Scale.CENTER_BOTH,
+        autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
         width: 450,
         height: 240
     },
@@ -310,6 +378,7 @@ const config = {
     fps: {
         debug: true
     },
+    antialias: false
     // Add any necessary physics or other game config settings here
 };
 
